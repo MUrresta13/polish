@@ -1,11 +1,11 @@
-/* Dracula’s Tic Tac Toe 2 — all logic in one file */
+/* Dracula’s Tic Tac Toe 2 — no skips, no resets */
 
 // ---------- DOM ----------
 const startOverlay = document.getElementById('startOverlay');
 const startBtn = document.getElementById('startBtn');
+
 const mediaStage = document.getElementById('mediaStage');
 const introVideo = document.getElementById('introVideo');
-const skipBtn = document.getElementById('skipBtn');
 
 const gameEl = document.getElementById('game');
 const boardEl = document.getElementById('board');
@@ -14,18 +14,21 @@ const youWinsEl = document.getElementById('youWins');
 const cpuWinsEl = document.getElementById('cpuWins');
 const drawStreakEl = document.getElementById('drawStreak');
 
-const resetRoundBtn = document.getElementById('resetRound');
-const resetAllBtn = document.getElementById('resetAll');
-
 const successDlg = document.getElementById('successDlg');
 const codeField = document.getElementById('codeField');
 const copyBtn = document.getElementById('copyBtn');
 const okBtn = document.getElementById('okBtn');
 
-// ---------- Media setup (video with fallback to mp3 audio) ----------
-function prepareIntroMedia() {
+// ---------- Start (button only) ----------
+startBtn.addEventListener('click', () => {
+  startOverlay.classList.add('hidden');
+  mediaStage.classList.remove('hidden');
+  playIntro();
+});
+
+function playIntro(){
   introVideo.innerHTML = '';
-  // If you only have Dracula.mp3, this still works: video element plays audio, screen stays black.
+  // Try MP4 first; fall back to MP3 (audio-only) if that’s what you have
   const s1 = document.createElement('source');
   s1.src = 'Dracula.mp4'; s1.type = 'video/mp4';
   const s2 = document.createElement('source');
@@ -33,33 +36,20 @@ function prepareIntroMedia() {
   introVideo.append(s1, s2);
   introVideo.controls = false;
   introVideo.autoplay = true;
+  introVideo.play().catch(()=>{ /* user gesture exists from button press */ });
 }
-
-startBtn.addEventListener('click', () => {
-  startOverlay.classList.add('hidden');
-  mediaStage.classList.remove('hidden');
-  prepareIntroMedia();
-  introVideo.play().catch(()=>{ /* user gesture exists, should play */ });
-});
-
-skipBtn.addEventListener('click', endIntro);
-introVideo.addEventListener('ended', endIntro);
-
-function endIntro() {
-  introVideo.pause();
+introVideo.addEventListener('ended', () => {
   mediaStage.classList.add('hidden');
   gameEl.classList.remove('hidden');
-  statusEl.textContent = firstToMove === 'X'
-    ? 'Your move.'
-    : 'Dracula goes first…';
+  statusEl.textContent = firstToMove === 'X' ? 'Your move.' : 'Dracula goes first…';
   if (firstToMove === 'O') draculaTurn();
-}
+});
 
 // ---------- Game state ----------
 let board, current, finished;
 let youWins = 0, cpuWins = 0, drawStreak = 0;
 let draculaStreakForReset = 0;
-let firstToMove = 'O'; // O = Dracula, X = You
+let firstToMove = 'O'; // Dracula starts
 const lines = [
   [0,1,2],[3,4,5],[6,7,8],
   [0,3,6],[1,4,7],[2,5,8],
@@ -70,7 +60,7 @@ initBoard();
 function initBoard() {
   board = Array(9).fill(null);
   finished = false;
-  current = firstToMove; // X or O
+  current = firstToMove;
   boardEl.innerHTML = '';
   for (let i=0;i<9;i++){
     const c = document.createElement('button');
@@ -121,19 +111,16 @@ function checkEnd(){
 
   if (w === 'X'){
     youWins++;
-    draculaStreakForReset = 0; // Dracula didn’t win this one
-    drawStreak = 0;            // break draw streak
-    youWinsEl.textContent = youWins;
+    draculaStreakForReset = 0;
+    drawStreak = 0;
+    reflectStats();
     statusEl.textContent = 'You won this round!';
     if (youWins >= 3){
-      // Success
       openSuccess();
-      // Reset counters for a fresh run if they continue
       youWins = 0; cpuWins = 0; drawStreak = 0; draculaStreakForReset = 0;
       reflectStats();
-      firstToMove = 'O'; // Dracula starts again for a new session
+      firstToMove = 'O';
     } else {
-      // Next round: Dracula starts unless player earned first via draws
       nextRound();
     }
     return;
@@ -142,13 +129,13 @@ function checkEnd(){
   if (w === 'O'){
     cpuWins++;
     draculaStreakForReset++;
-    drawStreak = 0; // as requested: draw streak resets on Dracula win
+    drawStreak = 0; // draw streak resets on Dracula win
     reflectStats();
     statusEl.textContent = 'Dracula wins this round…';
     if (draculaStreakForReset >= 3){
-      youWins = 0;               // wipe the player’s win score
-      draculaStreakForReset = 0; // restart Dracula’s 3-win counter
-      youWinsEl.textContent = youWins;
+      youWins = 0;               // wipe player wins after 3 Dracula wins
+      draculaStreakForReset = 0;
+      reflectStats();
       statusEl.textContent += ' Your wins have been reset!';
     }
     nextRound();
@@ -159,10 +146,11 @@ function checkEnd(){
   drawStreak++;
   drawStreakEl.textContent = Math.min(drawStreak,5);
   statusEl.textContent = 'It’s a draw.';
-  // If player earns 5 consecutive draws, they go first next round
-  if (drawStreak >= 5) firstToMove = 'X';
-  else firstToMove = 'O';
+  firstToMove = (drawStreak >= 5) ? 'X' : 'O';
   setTimeout(initBoard, 900);
+  if (firstToMove === 'O'){
+    setTimeout(()=>draculaTurn(), 1000);
+  }
 }
 
 function reflectStats(){
@@ -173,26 +161,22 @@ function reflectStats(){
 
 function nextRound(){
   firstToMove = drawStreak >= 5 ? 'X' : 'O';
-  setTimeout(initBoard, 900);
-  // If Dracula still starts, let him immediately move after board appears
-  if (firstToMove === 'O'){
-    setTimeout(()=>draculaTurn(), 1000);
-  }
+  setTimeout(()=>{
+    initBoard();
+    if (firstToMove === 'O') setTimeout(()=>draculaTurn(), 400);
+  }, 900);
 }
 
-// ---------- Dracula AI (minimax, optimal) ----------
+// ---------- Dracula AI (minimax) ----------
 function draculaTurn(){
   if (finished) return;
   const idx = bestMove(board, 'O');
   move(idx, 'O');
 }
-
-// Minimax with small depth scoring
 function bestMove(b, ai){
   const human = ai==='O' ? 'X':'O';
   const avail = emptySquares(b);
   let bestScore = -Infinity, bestIndex = avail[0];
-
   for (const i of avail){
     b[i]=ai;
     const score = minimax(b, false, ai, human, 0);
@@ -201,55 +185,36 @@ function bestMove(b, ai){
   }
   return bestIndex;
 }
-
 function minimax(b, isMax, ai, human, depth){
   const w = winner(b);
   if (w===ai)   return 10 - depth;
   if (w===human) return depth - 10;
   if (w==='draw') return 0;
-
   const avail = emptySquares(b);
   if (isMax){
     let val=-Infinity;
-    for (const i of avail){
-      b[i]=ai;
-      val=Math.max(val, minimax(b,false,ai,human,depth+1));
-      b[i]=null;
-    }
+    for (const i of avail){ b[i]=ai; val=Math.max(val, minimax(b,false,ai,human,depth+1)); b[i]=null; }
     return val;
   } else {
     let val=Infinity;
-    for (const i of avail){
-      b[i]=human;
-      val=Math.min(val, minimax(b,true,ai,human,depth+1));
-      b[i]=null;
-    }
+    for (const i of avail){ b[i]=human; val=Math.min(val, minimax(b,true,ai,human,depth+1)); b[i]=null; }
     return val;
   }
 }
 
-// ---------- Controls ----------
-resetRoundBtn.addEventListener('click', ()=>initBoard());
-resetAllBtn.addEventListener('click', ()=>{
-  youWins=0; cpuWins=0; drawStreak=0; draculaStreakForReset=0; firstToMove='O';
-  reflectStats();
-  initBoard();
-});
-
-function openSuccess(){
-  successDlg.showModal();
-}
+// ---------- Success ----------
+function openSuccess(){ successDlg.showModal(); }
 copyBtn.addEventListener('click', async ()=>{
   try{
     await navigator.clipboard.writeText(codeField.value);
     copyBtn.textContent = 'Copied!';
     setTimeout(()=>copyBtn.textContent='Copy code', 900);
-  }catch{ /* ignore */ }
+  }catch{}
 });
 okBtn.addEventListener('click', ()=>{
   successDlg.close();
   initBoard();
 });
 
-// ---------- First round ----------
+// ---------- Initial stat paint ----------
 reflectStats();
