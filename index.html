@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dracula’s Tic Tac Toe 2</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Start overlay -->
+  <div id="startOverlay" class="overlay">
+    <div class="card">
+      <h1>🧛‍♂️ Dracula’s Tic Tac Toe 2</h1>
+      <p class="tagline">
+        Dracula’s back for revenge, unable to accept defeat…<br />
+        Outsmart him in a best-of-forever gauntlet. Draw with him five times in a row to seize first move.
+        But beware: if Dracula wins <em>three</em> times, your total wins are wiped. Win three games to claim the
+        passcode for Clue 14.
+      </p>
+
+      <button id="startBtn" class="btn btn-primary">Start the Challenge</button>
+      <p class="hint">This will play the intro. Turn sound on.</p>
+    </div>
+  </div>
+
+  <!-- Media stage (plays video/audio, then hides automatically) -->
+  <div id="mediaStage" class="overlay hidden">
+    <video id="introVideo" class="video" playsinline></video>
+    <button id="skipBtn" class="btn btn-ghost small">Skip</button>
+  </div>
+
+  <!-- Game shell -->
+  <main id="game" class="hidden">
+    <header class="top">
+      <h2>🧛‍♂️ Dracula’s Tic Tac Toe 2</h2>
+      <p class="desc">
+        Win <strong>3</strong> times to succeed. Dracula goes first—<em>unless</em> you draw with him
+        <strong>5</strong> times in a row, then you get first move next round. If Dracula wins a round your draw streak
+        resets; if Dracula wins <strong>3</strong> total, your win count is reset to <strong>0</strong>.
+      </p>
+      <div class="stats">
+        <div>🧍 You: <span id="youWins">0</span></div>
+        <div>🧛‍♂️ Dracula: <span id="cpuWins">0</span></div>
+        <div>🤝 Draw streak: <span id="drawStreak">0</span> / 5</div>
+      </div>
+      <p id="status" class="status">Dracula is thinking…</p>
+    </header>
+
+    <section class="board" id="board" aria-label="tic tac toe board"></section>
+
+    <footer class="bottom">
+      <button id="resetRound" class="btn btn-ghost">Reset Round</button>
+      <button id="resetAll" class="btn btn-ghost">Reset All</button>
+    </footer>
+  </main>
+
+  <!-- Success modal -->
+  <dialog id="successDlg">
+    <h3>✅ Success!</h3>
+    <p>You defeated Dracula three times in a row of battles.</p>
+    <div class="code-row">
+      <input id="codeField" value="GHOULINTENTIONS" readonly />
+      <button id="copyBtn" class="btn btn-primary">Copy code</button>
+    </div>
+    <button id="okBtn" class="btn btn-ghost">Play Again</button>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
+</html>
