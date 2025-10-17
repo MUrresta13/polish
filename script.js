@@ -167,38 +167,131 @@ function nextRound(){
   }, 900);
 }
 
-// ---------- Dracula AI (minimax) ----------
+// ---------- Dracula AI (imperfect, 7/10 with variety) ----------
 function draculaTurn(){
   if (finished) return;
-  const idx = bestMove(board, 'O');
-  move(idx, 'O');
+
+  // Slight random delay so it feels less robotic
+  const delay = 200 + Math.floor(Math.random()*250);
+  setTimeout(() => {
+    const idx = chooseMove7of10(board, 'O');
+    move(idx, 'O');
+  }, delay);
 }
-function bestMove(b, ai){
-  const human = ai==='O' ? 'X':'O';
-  const avail = emptySquares(b);
-  let bestScore = -Infinity, bestIndex = avail[0];
-  for (const i of avail){
-    b[i]=ai;
-    const score = minimax(b, false, ai, human, 0);
-    b[i]=null;
-    if (score>bestScore){ bestScore=score; bestIndex=i; }
+
+/**
+ * 7/10 difficulty:
+ * - Depth-limited minimax (depth 3–5, randomized per turn)
+ * - Random tie-breaking among equal moves
+ * - Small chance to pick a merely “good” move instead of the absolute best
+ * - Score jitter to avoid deterministic lines
+ * - Diverse opening (random among corners/center first turn)
+ */
+function chooseMove7of10(b, ai){
+  const human = ai === 'O' ? 'X' : 'O';
+  const empties = emptySquares(b);
+
+  // Opening variety if board is empty
+  if (empties.length === 9){
+    const openers = [0, 2, 4, 6, 8]; // corners + center
+    return openers[Math.floor(Math.random()*openers.length)];
   }
-  return bestIndex;
+
+  // Randomize search depth between 3 and 5 plies each turn
+  const maxDepth = 3 + Math.floor(Math.random()*3); // 3,4,5
+
+  // Evaluate moves with jitter and collect candidates
+  let bestScore = -Infinity;
+  const scored = [];
+  for (const i of empties){
+    b[i] = ai;
+    const score = minimaxImperfect(b, false, ai, human, 0, maxDepth) + randFloat(-0.8, 0.8);
+    b[i] = null;
+    scored.push({ idx: i, score });
+    if (score > bestScore) bestScore = score;
+  }
+
+  // Candidates within a band of the best (keeps variety)
+  const band = 1.5; // points near-best
+  const nearBest = scored.filter(m => bestScore - m.score <= band);
+
+  // With ~25% chance, deliberately avoid the top pick to be beatable
+  const makeHumanHope = Math.random() < 0.25;
+  if (makeHumanHope && nearBest.length > 1){
+    // pick any near-best that is NOT the absolute top (if possible)
+    const notTop = nearBest.filter(m => m.score < bestScore);
+    if (notTop.length) return randomFrom(notTop).idx;
+  }
+
+  // Otherwise pick randomly among near-best (prevents repetition)
+  return randomFrom(nearBest).idx;
 }
-function minimax(b, isMax, ai, human, depth){
+
+function minimaxImperfect(b, isMax, ai, human, depth, maxDepth){
   const w = winner(b);
-  if (w===ai)   return 10 - depth;
-  if (w===human) return depth - 10;
-  if (w==='draw') return 0;
-  const avail = emptySquares(b);
+  if (w === ai)   return 10 - depth;
+  if (w === human) return depth - 10;
+  if (w === 'draw') return 0;
+
+  // Depth limit: at lower depth, add a tiny heuristic for center/corners/lines
+  if (depth >= maxDepth){
+    return heuristic(b, ai, human) + randFloat(-0.5, 0.5);
+  }
+
+  const empties = emptySquares(b);
+
   if (isMax){
-    let val=-Infinity;
-    for (const i of avail){ b[i]=ai; val=Math.max(val, minimax(b,false,ai,human,depth+1)); b[i]=null; }
+    let val = -Infinity;
+    // Randomize order to avoid deterministic lines
+    shuffleInPlace(empties);
+    for (const i of empties){
+      b[i] = ai;
+      val = Math.max(val, minimaxImperfect(b, false, ai, human, depth+1, maxDepth));
+      b[i] = null;
+      // small alpha-like cutoff using heuristic threshold
+      if (val >= 10 - depth) break;
+    }
     return val;
   } else {
-    let val=Infinity;
-    for (const i of avail){ b[i]=human; val=Math.min(val, minimax(b,true,ai,human,depth+1)); b[i]=null; }
+    let val = Infinity;
+    shuffleInPlace(empties);
+    for (const i of empties){
+      b[i] = human;
+      val = Math.min(val, minimaxImperfect(b, true, ai, human, depth+1, maxDepth));
+      b[i] = null;
+      if (val <= depth - 10) break;
+    }
     return val;
+  }
+}
+
+// Lightweight positional heuristic (favor center, corners, potential lines)
+function heuristic(b, ai, human){
+  const center = (b[4] === ai ? 1.5 : b[4] === human ? -1.5 : 0);
+  const corners = [0,2,6,8].reduce((s,i)=>{
+    if (b[i] === ai) return s+0.6;
+    if (b[i] === human) return s-0.6;
+    return s;
+  }, 0);
+  // count near-complete lines
+  let linesScore = 0;
+  for (const [a,c,d] of lines){
+    const trio = [b[a], b[c], b[d]];
+    const aiCount = trio.filter(v=>v===ai).length;
+    const huCount = trio.filter(v=>v===human).length;
+    if (aiCount && !huCount) linesScore += [0,0.5,1.2,3][aiCount];   // building/finishing
+    if (huCount && !aiCount) linesScore -= [0,0.55,1.3,3][huCount]; // blocking pressure
+  }
+  return center + corners + linesScore;
+}
+
+// Utils
+function randFloat(min, max){ return Math.random()*(max-min)+min; }
+function randomFrom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function shuffleInPlace(arr){
+  for (let i=arr.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
 
